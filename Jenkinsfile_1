@@ -1,0 +1,44 @@
+
+pipeline {
+  agent any
+  parameters {
+      choice(name: 'aws_account', choices: ['default', 'user1', 'devops'], description: 'AWS account')
+      choice(name: 'clients', choices: ['Clien1', 'Client2', 'Client3'], description: 'Clients List')
+      choice(name: 'tf_exe', choices: ['apply', 'destroy'], description: 'terraform execution')
+      choice(name: 'aws_regions', choices: ['eu-west-1'], description: 'AWS Regions')
+  }
+
+  stages {
+    stage('clean up'){
+      steps {
+        deleteDir()
+      }
+    }
+    stage('Build Environment'){
+      steps {
+        sh '''
+          git clone ssh://git@git.company.ie:7999/~olva.tito/application1.git
+          git clone ssh://git@git.company.ie:7999/~olva.tito/application2.git
+          git clone ssh://git@git.company.ie:7999/~olva.tito/application3.git
+          git clone ssh://git@git.company.ie:7999/~olva.tito/application4.git
+          git clone ssh://git@git.company.ie:7999/~olva.tito/application5.git
+
+          sed -i "s/env_client_name/${clients}/g" application2/app/tfvars/app-ec2config.tfvars
+          cat application2/app/tfvars/app-ec2config.tfvars
+          mkdir -p /var/lib/jenkins/.mysql
+          cp -rf application2/config.cnf /var/lib/jenkins/.mysql
+          chmod 0444 /var/lib/jenkins/.mysql/config.cnf
+          export TF_VAR_awsacc=${aws_account}
+          export TF_VAR_build_number=${BUILD_NUMBER}
+          export TF_VAR_clients=${clients}
+          export TF_VAR_aws_region=${aws_regions}
+          cd application2/app/
+          terraform init
+
+          terraform ${tf_exe}  -auto-approve -var-file=tfvars/app-ec2config.tfvars -var-file=tfvars/mail_config.tfvars
+
+        '''
+      }
+    }
+  }
+}

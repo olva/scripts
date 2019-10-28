@@ -1,0 +1,52 @@
+
+pipeline {
+  agent any
+  parameters {
+      choice(name: 'aws_account', choices: ['default', 'user1', 'devops'], description: 'AWS account')
+      choice(name: 'clients', choices: ['client3', 'client2', 'client1'], description: 'Clients List')
+      choice(name: 'aws_env', choices: ['ENV-1', 'ENV-2'], description: 'AWS Environments')
+      extendedChoice bindings: '', description: 'ECR CM Images tags ', groovyClasspath: '', groovyScriptFile: '/var/lib/jenkins/get_scripts/get_imagesTag.groovy', multiSelectDelimiter: ',', name: 'cm_tags', quoteValue: false, saveJSONParameterToFile: false, type: 'PT_SINGLE_SELECT', visibleItemCount: 5
+  }
+
+  stages {
+    stage('clean up'){
+      steps {
+        deleteDir()
+      }
+    }
+    stage('Build Environment'){
+      steps {
+        sh '''
+          echo "client_db=${clients}" > sshenv
+          case $aws_env in
+              ENV-1)
+                APPSRV="xxx.xxx.xxx.xxx"
+                APPSRVPRIV="xxx.xxx.xxx.xxx"
+                WEBSRV="xxx.xxx.xxx.xxx"
+                WEBSRVPRIV="xxx.xxx.xxx.xxx"
+                ;;
+              ENV-2)
+                APPSRV="xxx.xxx.xxx.xxx"
+                APPSRVPRIV="xxx.xxx.xxx.xxx"
+                WEBSRV="xxx.xxx.xxx.xxx"
+                WEBSRVPRIV="xxx.xxx.xxx.xxx"
+                ;;
+          esac
+          echo "APPSRVPRIV=$APPSRVPRIV" >> sshenv
+          echo "WEBSRVPRIV=$WEBSRVPRIV" >> sshenv
+          echo "CM_TAG=$cm_tags"    >> sshenv
+          echo $cm_tags
+          echo $APPSRV
+          echo $WEBSRV
+          echo ${clients}
+          scp  -i ~/key.pem sshenv ubuntu@${APPSRV}:~/.ssh/environment
+          scp  -i ~/key.pem sshenv ubuntu@${APPSRV}:~/.env
+          ssh -t -i ~/key.pem ubuntu@${APPSRV} "sudo ./dbdeploy.sh"
+          ssh -t -i ~/key.pem ubuntu@${WEBSRV} "sudo docker-compose down"
+          sleep 10
+          ssh -t -i ~/key.pem ubuntu@${WEBSRV} "sudo docker-compose up -d"
+        '''
+      }
+    }
+  }
+}
